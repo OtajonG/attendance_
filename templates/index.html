@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Attendance Records</title>
+    <link
+      rel="stylesheet"
+      type="text/css"
+      href="{{ url_for('static', filename='style.css') }}"
+    />
+  </head>
+  <body>
+    <h1>Student Attendance</h1>
+
+    <ul id="studentList"></ul>
+
+    <div id="webcam-container">
+      <video
+        id="webcamVideo"
+        width="320"
+        height="240"
+        style="display: inline-block"
+        autoplay
+      ></video>
+      <canvas
+        id="webcamCanvas"
+        style="display: none"
+        height="150px"
+        width="300px"
+      ></canvas>
+    </div>
+
+    <h2>Live Attendance Log</h2>
+    <div id="live-attendance-logs"></div>
+
+    <table id="attendanceTable">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Timestamp</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+  </body>
+</html>

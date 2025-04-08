@@ -1,0 +1,144 @@
+body {
+    font-family: sans-serif;
+    background-color: #000; /* Black background */
+    color: #fff; /* White text */
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center; /* Center content horizontally */
+}
+
+h1 {
+    color: #fff;
+    margin-top: 20px;
+    margin-bottom: 30px;
+}
+
+#studentList {
+    list-style: none;
+    padding: 0;
+    margin-bottom: 20px;
+    width: 80%; /* Adjust width as needed */
+    max-width: 600px;
+}
+
+#studentList li {
+    background-color: #111; /* Dark background for list items */
+    padding: 15px;
+    margin-bottom: 10px;
+    border-radius: 5px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+#studentList li span {
+    flex-grow: 1;
+}
+
+.scan-face-button {
+    background-color: #222;
+    color: #fff;
+    border: none;
+    padding: 10px 15px;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+.scan-face-button:hover {
+    background-color: #444;
+}
+
+.attendance-status {
+    margin-left: 15px;
+    font-size: 1.2em;
+    color: #5cb85c; /* Green for present */
+}
+
+#webcam-container { /* Container for webcam and canvas */
+    display: flex;
+    flex-direction: column;
+    align-items: center; /* Center camera below title */
+    margin-bottom: 30px;
+}
+
+#webcamVideo {
+    width: 480px; /* Larger width for the camera */
+    height: auto; /* Maintain aspect ratio */
+    border-radius: 5px;
+    margin-bottom: 10px; /* Space between camera and scan button */
+}
+
+#captureFace { /* Apply styles to the capture button if you use one separately */
+    background-color: #d9534f; /* Red color for capture button */
+    color: #fff;
+    border: none;
+    padding: 15px 30px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 1.1em;
+    transition: background-color 0.3s ease;
+}
+
+#captureFace:hover {
+    background-color: #c9302c;
+}
+
+#webcamCanvas {
+    display: none; /* Keep canvas hidden */
+}
+
+#attendanceTable {
+    width: 80%;
+    max-width: 600px;
+    border-collapse: collapse;
+    margin-top: 20px;
+    color: #fff;
+}
+
+#attendanceTable th, #attendanceTable td {
+    border: 1px solid #333;
+    padding: 10px;
+    text-align: left;
+}
+
+#attendanceTable th {
+    background-color: #222;
+}
+
+#attendanceTable tbody tr:nth-child(even) {
+    background-color: #1a1a1a;
+}
+
+/* Specific style for the "Scan Face" button to make it bigger and red */
+.scan-face-button {
+    background-color: #d9534f; /* Red */
+    color: #fff;
+    border: none;
+    padding: 12px 25px; /* Bigger padding */
+    border-radius: 8px; /* Slightly more rounded */
+    cursor: pointer;
+    font-size: 1em; /* Slightly larger font */
+    transition: background-color 0.3s ease;
+}
+
+.scan-face-button:hover {
+    background-color: #c9302c;
+}
+
+/* Center the student list items' content more effectively */
+#studentList li {
+    /* ... other styles ... */
+    justify-content: space-around; /* Distribute space more evenly */
+}
+
+#studentList li span {
+    text-align: center; /* Center the student name */
+}
+
+/* Adjust margin for the scan face button in the list */
+#studentList li .scan-face-button {
+    margin-left: auto; /* Push to the right */
+}
