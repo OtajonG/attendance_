@@ -1,9 +1,6 @@
 import asyncio
 import platform
 from bleak import BleakClient, BleakScanner
-from bleak.backends.characteristic import BleakGATTCharacteristic
-from bleak.backends.client import BleakClient
-from bleak.backends.device import BLEDevice
 from bleak.backends.scanner import AdvertisementData
 
 TEACHER_BEACON_UUID = "019637fa-978a-7a1c-8447-f914acdc999c"
