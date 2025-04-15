@@ -2,6 +2,7 @@ import asyncio
 import platform
 from bleak import BleakClient, BleakScanner
 from bleak.backends.scanner import AdvertisementData
+import struct
 
 TEACHER_BEACON_UUID = "019637fa-978a-7a1c-8447-f914acdc999c"
 TEACHER_BEACON_MAJOR = 1
@@ -16,12 +17,9 @@ async def advertise_ibeacon():
         )
         return
 
-    from bleak.uuids import register_uuids
+    from bleak.winrt import winrt_bluetooth
     from bleak.exc import BleakError
 
-    ibeacon_uuid = (
-        "E2C56DB5-DFFB-48D2-B060-D0F5A71096E0"  # Standard iBeacon UUID prefix
-    )
     manufacturer_id = 0x4C00  # Apple
 
     beacon_data = bytes(
@@ -31,10 +29,10 @@ async def advertise_ibeacon():
             0x1A,  # LE General Discoverable Mode + BR/EDR Not Supported
             0xFF,  # Manufacturer Specific Data
             0x4C,
-            0x00,  # Apple Manufacturer ID (little endian in byte array)
+            0x00,  # Apple Manufacturer ID (little endian)
             0x02,  # iBeacon prefix
             0x15,  # Length of iBeacon advertising payload
-            # Proximity UUID (little endian in byte array)
+            # Proximity UUID (little endian)
             0xFA,
             0x37,
             0x96,
@@ -58,13 +56,11 @@ async def advertise_ibeacon():
             (TEACHER_BEACON_MINOR >> 8) & 0xFF,
             TEACHER_BEACON_MINOR & 0xFF,
             # Calibrated Tx Power (signed byte)
-            (BEACON_POWER & 0xFF) - 256 if BEACON_POWER < 0 else BEACON_POWER,
+            struct.pack("b", BEACON_POWER)[0],
         ]
     )
 
     try:
-        from bleak.winrt import winrt_bluetooth
-
         bluetooth_radio = await winrt_bluetooth.get_default_radio()
         if not bluetooth_radio:
             print("Could not get default Bluetooth radio.")
