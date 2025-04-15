@@ -1,85 +1,129 @@
+/* static/style.css */
+
 body {
     font-family: sans-serif;
     background-color: #000; /* Black background */
     color: #fff; /* White text */
     margin: 0;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center; /* Center content horizontally */
+    padding: 10px; /* Add some padding around the content */
+    display: grid;
+    grid-template-rows: auto auto 1fr auto; /* Header, Student List, Main Area, Table */
+    grid-template-columns: 1fr;
+    gap: 10px;
+    min-height: 100vh;
+    box-sizing: border-box; /* Include padding and border in element's total width and height */
 }
 
 h1 {
     color: #fff;
-    margin-top: 20px;
-    margin-bottom: 30px;
+    text-align: center;
+    margin-top: 10px;
+    margin-bottom: 15px;
+    font-size: 1.8em;
 }
 
 #studentList {
     list-style: none;
     padding: 0;
-    margin-bottom: 20px;
-    width: 80%; /* Adjust width as needed */
-    max-width: 600px;
+    margin: 0 auto 15px auto;
+    width: 95%; /* Take more width */
+    max-width: 800px;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
 }
 
 #studentList li {
     background-color: #111; /* Dark background for list items */
-    padding: 15px;
-    margin-bottom: 10px;
+    padding: 10px;
+    margin-bottom: 8px;
     border-radius: 5px;
     display: flex;
     justify-content: space-between;
     align-items: center;
+    flex-basis: calc(50% - 10px); /* Two items per row on larger screens */
+    box-sizing: border-box;
+}
+
+@media (max-width: 600px) {
+    #studentList li {
+        flex-basis: 100%; /* One item per row on smaller screens */
+    }
 }
 
 #studentList li span {
     flex-grow: 1;
+    text-align: center;
 }
 
 .scan-face-button {
-    background-color: #222;
+    background-color: #d9534f; /* Red */
     color: #fff;
     border: none;
-    padding: 10px 15px;
-    border-radius: 5px;
+    padding: 8px 16px; /* Adjusted padding */
+    border-radius: 6px; /* Adjusted border-radius */
     cursor: pointer;
+    font-size: 0.9em; /* Adjusted font size */
     transition: background-color 0.3s ease;
+    margin-left: 10px;
 }
 
 .scan-face-button:hover {
-    background-color: #444;
+    background-color: #c9302c;
 }
 
 .attendance-status {
-    margin-left: 15px;
-    font-size: 1.2em;
+    margin-left: 10px;
+    font-size: 1em;
     color: #5cb85c; /* Green for present */
+}
+
+/* Main content area for webcam and logs */
+.main-content {
+    display: grid;
+    grid-template-columns: 1fr 1fr; /* Two equal columns */
+    gap: 10px;
+    width: 95%;
+    max-width: 800px;
+    margin: 0 auto 15px auto;
+}
+
+@media (max-width: 768px) {
+    .main-content {
+        grid-template-columns: 1fr; /* Stack on smaller screens */
+        grid-template-rows: auto auto;
+    }
 }
 
 #webcam-container { /* Container for webcam and canvas */
     display: flex;
     flex-direction: column;
     align-items: center; /* Center camera below title */
-    margin-bottom: 30px;
+    border: 1px solid #333;
+    border-radius: 5px;
+    padding: 10px;
+    box-sizing: border-box;
 }
 
 #webcamVideo {
-    width: 480px; /* Larger width for the camera */
+    width: 100%; /* Make responsive within container */
+    max-width: 400px; /* Limit maximum width */
     height: auto; /* Maintain aspect ratio */
     border-radius: 5px;
-    margin-bottom: 10px; /* Space between camera and scan button */
+    margin-bottom: 5px; /* Space between camera and button */
 }
 
 #captureFace { /* Apply styles to the capture button if you use one separately */
     background-color: #d9534f; /* Red color for capture button */
     color: #fff;
     border: none;
-    padding: 15px 30px;
+    padding: 10px 20px;
     border-radius: 5px;
     cursor: pointer;
-    font-size: 1.1em;
+    font-size: 0.9em;
     transition: background-color 0.3s ease;
+    margin-top: 5px;
 }
 
 #captureFace:hover {
@@ -90,17 +134,32 @@ h1 {
     display: none; /* Keep canvas hidden */
 }
 
+#live-attendance-logs {
+    border: 1px solid #333;
+    border-radius: 5px;
+    padding: 10px;
+    box-sizing: border-box;
+}
+
+#live-attendance-logs h2 {
+    text-align: left;
+    margin-top: 0;
+    margin-bottom: 10px;
+    font-size: 1.4em;
+}
+
 #attendanceTable {
-    width: 80%;
-    max-width: 600px;
+    width: 95%;
+    max-width: 800px;
     border-collapse: collapse;
-    margin-top: 20px;
+    margin: 15px auto 0 auto;
     color: #fff;
+    font-size: 0.9em;
 }
 
 #attendanceTable th, #attendanceTable td {
     border: 1px solid #333;
-    padding: 10px;
+    padding: 8px;
     text-align: left;
 }
 
@@ -110,35 +169,4 @@ h1 {
 
 #attendanceTable tbody tr:nth-child(even) {
     background-color: #1a1a1a;
-}
-
-/* Specific style for the "Scan Face" button to make it bigger and red */
-.scan-face-button {
-    background-color: #d9534f; /* Red */
-    color: #fff;
-    border: none;
-    padding: 12px 25px; /* Bigger padding */
-    border-radius: 8px; /* Slightly more rounded */
-    cursor: pointer;
-    font-size: 1em; /* Slightly larger font */
-    transition: background-color 0.3s ease;
-}
-
-.scan-face-button:hover {
-    background-color: #c9302c;
-}
-
-/* Center the student list items' content more effectively */
-#studentList li {
-    /* ... other styles ... */
-    justify-content: space-around; /* Distribute space more evenly */
-}
-
-#studentList li span {
-    text-align: center; /* Center the student name */
-}
-
-/* Adjust margin for the scan face button in the list */
-#studentList li .scan-face-button {
-    margin-left: auto; /* Push to the right */
 }

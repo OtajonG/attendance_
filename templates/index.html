@@ -13,24 +13,24 @@
 
     <ul id="studentList"></ul>
 
-    <div id="webcam-container">
-      <video
-        id="webcamVideo"
-        width="320"
-        height="240"
-        style="display: inline-block"
-        autoplay
-      ></video>
-      <canvas
-        id="webcamCanvas"
-        style="display: none"
-        height="150px"
-        width="300px"
-      ></canvas>
-    </div>
+    <div class="main-content">
+      <div id="webcam-container">
+        <video id="webcamVideo" width="480" height="auto" autoplay></video>
+        <canvas
+          id="webcamCanvas"
+          style="display: none"
+          height="150px"
+          width="300px"
+        ></canvas>
+        <button id="captureFace" style="display: none">Capture Face</button>
+        <button id="scan-button" class="scan-face-button">Scan Face</button>
+      </div>
 
-    <h2>Live Attendance Log</h2>
-    <div id="live-attendance-logs"></div>
+      <div id="live-attendance-logs">
+        <h2>Live Attendance Log</h2>
+        <div id="live-attendance-logs-content"></div>
+      </div>
+    </div>
 
     <table id="attendanceTable">
       <thead>
