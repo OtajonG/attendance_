@@ -1,72 +1,99 @@
-import time
-from bluetooth import *
+import asyncio
+import platform
+from bleak import BleakClient, BleakScanner
+from bleak.backends.characteristic import BleakGATTCharacteristic
+from bleak.backends.client import BleakClient
+from bleak.backends.device import BLEDevice
+from bleak.backends.scanner import AdvertisementData
 
-# Define the UUID, Major, and Minor values for the teacher's beacon
 TEACHER_BEACON_UUID = "019637fa-978a-7a1c-8447-f914acdc999c"
 TEACHER_BEACON_MAJOR = 1
 TEACHER_BEACON_MINOR = 10
-
-# You might need to adjust these values depending on your system's requirements
-BEACON_INTERVAL = (
-    0.1  # Advertisement interval in seconds (shorter for faster detection)
-)
-BEACON_POWER = -59  # Measured Tx power at 1 meter in dBm
+BEACON_POWER = -59  # Approximate Tx power
 
 
-def advertise_beacon():
-    """Advertises a Bluetooth LE beacon with the teacher's specific UUID, Major, and Minor."""
-    adv_data = AdvertiseData(
-        adv_type=ADVERTISING_TYPE_CONNECTABLE_IDLE,
-        appearance=0x00,
-        flags=0x06,
-        manufacturer_data={
-            0x4C00: bytes(
-                [
-                    0x02,  # Beacon prefix for iBeacon
-                    0x15,  # Length of the iBeacon advertisement payload
-                    # UUID
-                    0x01,
-                    0x96,
-                    0x37,
-                    0xFA,
-                    0x97,
-                    0x8A,
-                    0x7A,
-                    0x1C,
-                    0x84,
-                    0x47,
-                    0xF9,
-                    0x14,
-                    0xAC,
-                    0xDC,
-                    0x99,
-                    0x9C,
-                    # Major
-                    (TEACHER_BEACON_MAJOR >> 8) & 0xFF,
-                    TEACHER_BEACON_MAJOR & 0xFF,
-                    # Minor
-                    (TEACHER_BEACON_MINOR >> 8) & 0xFF,
-                    TEACHER_BEACON_MINOR & 0xFF,
-                    # Measured Power (Tx power at 1 meter)
-                    (BEACON_POWER & 0xFF) - 256 if BEACON_POWER < 0 else BEACON_POWER,
-                ]
-            )
-        },
+async def advertise_ibeacon():
+    if platform.system() != "Windows":
+        print(
+            "BLE advertising using bleak is primarily supported on Windows for this example."
+        )
+        return
+
+    from bleak.uuids import register_uuids
+    from bleak.exc import BleakError
+
+    ibeacon_uuid = (
+        "E2C56DB5-DFFB-48D2-B060-D0F5A71096E0"  # Standard iBeacon UUID prefix
+    )
+    manufacturer_id = 0x4C00  # Apple
+
+    beacon_data = bytes(
+        [
+            0x02,  # Flags length
+            0x01,  # Flags data type
+            0x1A,  # LE General Discoverable Mode + BR/EDR Not Supported
+            0xFF,  # Manufacturer Specific Data
+            0x4C,
+            0x00,  # Apple Manufacturer ID (little endian in byte array)
+            0x02,  # iBeacon prefix
+            0x15,  # Length of iBeacon advertising payload
+            # Proximity UUID (little endian in byte array)
+            0xFA,
+            0x37,
+            0x96,
+            0x01,
+            0x8A,
+            0x97,
+            0x1C,
+            0x7A,
+            0x47,
+            0x84,
+            0xF9,
+            0x14,
+            0xDC,
+            0xAC,
+            0x99,
+            0x9C,
+            # Major (big endian)
+            (TEACHER_BEACON_MAJOR >> 8) & 0xFF,
+            TEACHER_BEACON_MAJOR & 0xFF,
+            # Minor (big endian)
+            (TEACHER_BEACON_MINOR >> 8) & 0xFF,
+            TEACHER_BEACON_MINOR & 0xFF,
+            # Calibrated Tx Power (signed byte)
+            (BEACON_POWER & 0xFF) - 256 if BEACON_POWER < 0 else BEACON_POWER,
+        ]
     )
 
     try:
-        adapter = getDefaultAdapter()
-        advertiser = BluetoothAdvertisement(adapter, BEACON_INTERVAL, adv_data)
-        advertiser.start()
-        print(
-            f"Broadcasting teacher beacon: UUID={TEACHER_BEACON_UUID}, Major={TEACHER_BEACON_MAJOR}, Minor={TEACHER_BEACON_MINOR}"
+        from bleak.winrt import winrt_bluetooth
+
+        bluetooth_radio = await winrt_bluetooth.get_default_radio()
+        if not bluetooth_radio:
+            print("Could not get default Bluetooth radio.")
+            return
+
+        advertisement_data = AdvertisementData(
+            local_name="iBeaconSimulator",
+            manufacturer_data={manufacturer_id: beacon_data},
+            service_uuids=[],
         )
+
+        print(
+            f"Advertising iBeacon: UUID={TEACHER_BEACON_UUID}, Major={TEACHER_BEACON_MAJOR}, Minor={TEACHER_BEACON_MINOR}, TxPower={BEACON_POWER}"
+        )
+        await bluetooth_radio.start_advertising(advertisement_data)
+
         while True:
-            time.sleep(1)
-        advertiser.stop()  # This line will likely not be reached in this loop
+            await asyncio.sleep(1)
+
+    except BleakError as e:
+        print(f"Bleak error during advertising: {e}")
+    except NotImplementedError:
+        print("BLE advertising is not implemented for this platform with Bleak.")
     except Exception as e:
-        print(f"Error advertising beacon: {e}")
+        print(f"An unexpected error occurred: {e}")
 
 
 if __name__ == "__main__":
-    advertise_beacon()
+    asyncio.run(advertise_ibeacon())
