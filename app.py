@@ -7,6 +7,7 @@ import os
 from datetime import datetime
 import asyncio
 from bleak import BleakScanner
+import uvicorn
 
 app = Flask(__name__)
 
@@ -145,6 +146,15 @@ async def scan_for_teacher_beacon():
         await asyncio.sleep(1)  # Scan every 1 second
 
 
-if __name__ == "__main__":
+# ... (your existing app.py code) ...
+
+
+async def main():
     asyncio.create_task(scan_for_teacher_beacon())
-    app.run(debug=True, use_reloader=False)
+    uvicorn.run(
+        app, host="0.0.0.0", port=5000, reload=True
+    )  # You can adjust host and port
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
