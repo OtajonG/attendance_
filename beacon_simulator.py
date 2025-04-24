@@ -1,3 +1,6 @@
+import sys
+
+sys.coinit_flags = 0
 import asyncio
 import platform
 from bleak import BleakClient, BleakScanner

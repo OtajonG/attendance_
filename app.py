@@ -6,8 +6,7 @@ import numpy as np
 import os
 from datetime import datetime
 import asyncio
-from bleak import BleakScanner
-import uvicorn
+from check_attendance import find_teacher_beacon, check_attendance
 
 app = Flask(__name__)
 
@@ -47,9 +46,14 @@ def record_attendance(student_id):
 
 
 @app.route("/")
+def index():
+    return render_template("index.html")
+
+
+@app.route("/check_attendance_page")
 def attendance_page():
     students_data = query_db("SELECT id, name FROM students")  # Using 'name' here
-    return render_template("index.html", students=students_data)
+    return render_template("attendance.html", students=students_data)
 
 
 @app.route("/students_list")
@@ -66,8 +70,24 @@ def records():
     return jsonify([dict(row) for row in attendance_records])
 
 
+async def process_attendance():
+    beacon_found = await find_teacher_beacon()
+    if beacon_found:
+        attendance_message = check_attendance("attendance_check.jpg")
+        return {"success": True, "message": attendance_message}
+    else:
+        return {
+            "success": False,
+            "message": "Teacher beacon not found. Attendance check skipped.",
+        }
+
+
 @app.route("/verify_face", methods=["POST"])
-def verify_face():
+async def verify_face():
+    beacon_result = await process_attendance()
+    if not beacon_result["success"]:
+        return jsonify(beacon_result)
+
     if "webcamImage" not in request.files or "student_id" not in request.form:
         return jsonify({"success": False, "message": "Missing data."})
 
@@ -116,45 +136,5 @@ def live_records():
     return jsonify([dict(row) for row in attendance_records])
 
 
-async def scan_for_teacher_beacon():
-    while True:
-        devices = await BleakScanner.discover()
-        for device in devices:
-            for ad in device.advertisement_data.manufacturer_data.values():
-                if (
-                    len(ad) >= 25 and ad[0] == 0x4C and ad[1] == 0x00
-                ):  # Apple manufacturer ID (for iBeacon)
-                    beacon_uuid_bytes = ad[2:18]
-                    beacon_uuid = "-".join(
-                        [beacon_uuid_bytes[i : i + 4].hex() for i in range(0, 16, 4)]
-                    )
-                    major = int.from_bytes(ad[18:20], "big")
-                    minor = int.from_bytes(ad[20:22], "big")
-
-                    if (
-                        beacon_uuid.lower() == TEACHER_BEACON_UUID.lower()
-                        and major == TEACHER_BEACON_MAJOR
-                        and minor == TEACHER_BEACON_MINOR
-                    ):
-                        student_id_to_record = 1  # IMPORTANT: Replace with your logic to identify the current student
-                        print(
-                            f"Teacher beacon detected (UUID: {beacon_uuid}, Major: {major}, Minor: {minor})! Recording attendance for student ID: {student_id_to_record}"
-                        )
-                        record_attendance(student_id_to_record)
-                        await asyncio.sleep(10)  # Wait a bit to avoid repeated triggers
-                        break
-        await asyncio.sleep(1)  # Scan every 1 second
-
-
-# ... (your existing app.py code) ...
-
-
-async def main():
-    asyncio.create_task(scan_for_teacher_beacon())
-    uvicorn.run(
-        app, host="0.0.0.0", port=5000, reload=True
-    )  # You can adjust host and port
-
-
 if __name__ == "__main__":
-    asyncio.run(main())
+    app.run(debug=True, use_reloader=False)
