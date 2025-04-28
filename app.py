@@ -6,9 +6,9 @@ import numpy as np
 import os
 from datetime import datetime
 import asyncio
-from check_attendance import find_teacher_beacon, check_attendance
+from check_attendance import find_teacher_beacon
 
-app = Flask(__name__)
+app = Flask(__name__)  # Use name
 
 DATABASE = "attendance.db"
 
@@ -52,13 +52,13 @@ def index():
 
 @app.route("/check_attendance_page")
 def attendance_page():
-    students_data = query_db("SELECT id, name FROM students")  # Using 'name' here
+    students_data = query_db("SELECT id, name FROM students")
     return render_template("attendance.html", students=students_data)
 
 
 @app.route("/students_list")
 def students_list():
-    students_data = query_db("SELECT id, name FROM students")  # Using 'name' here
+    students_data = query_db("SELECT id, name FROM students")
     return jsonify([dict(row) for row in students_data])
 
 
@@ -66,15 +66,14 @@ def students_list():
 def records():
     attendance_records = query_db(
         "SELECT s.name, a.timestamp FROM attendance a JOIN students s ON a.student_id = s.id"
-    )  # Using 'name' here
+    )
     return jsonify([dict(row) for row in attendance_records])
 
 
 async def process_attendance():
     beacon_found = await find_teacher_beacon()
     if beacon_found:
-        attendance_message = check_attendance("attendance_check.jpg")
-        return {"success": True, "message": attendance_message}
+        return {"success": True}
     else:
         return {
             "success": False,
@@ -89,10 +88,31 @@ async def verify_face():
         return jsonify(beacon_result)
 
     if "webcamImage" not in request.files or "student_id" not in request.form:
-        return jsonify({"success": False, "message": "Missing data."})
+        return jsonify(
+            {"success": False, "message": "Missing data (image or student ID)."}
+        )
 
+    student_id_from_form = request.form["student_id"]
     webcam_image_file = request.files["webcamImage"]
-    student_id = request.form["student_id"]
+
+    # Verify student ID existence and get face encoding
+    student_data = query_db(
+        "SELECT face_encoding FROM students WHERE id = ?",
+        (student_id_from_form,),
+        one=True,
+    )
+
+    if not student_data:
+        return jsonify({"success": False, "message": "Invalid Student ID."})
+
+    stored_face_encoding_bytes = student_data["face_encoding"]
+
+    if not stored_face_encoding_bytes:
+        return jsonify(
+            {"success": False, "message": "Student face data not found for this ID."}
+        )
+
+    stored_face_encoding = np.frombuffer(stored_face_encoding_bytes, dtype=np.float64)
 
     webcam_img_bytes = webcam_image_file.read()
     webcam_img_array = np.frombuffer(webcam_img_bytes, np.uint8)
@@ -108,30 +128,25 @@ async def verify_face():
         webcam_img, webcam_face_locations
     )[0]
 
-    student_data = query_db(
-        "SELECT face_encoding FROM students WHERE id = ?", (student_id,), one=True
+    results = face_recognition.compare_faces(
+        [stored_face_encoding], webcam_face_encoding, tolerance=0.6
     )
-
-    if student_data and student_data["face_encoding"]:
-        stored_face_encoding = np.frombuffer(
-            student_data["face_encoding"], dtype=np.float64
-        )
-        results = face_recognition.compare_faces(
-            [stored_face_encoding], webcam_face_encoding
-        )
-        if results[0]:
-            record_attendance(student_id)
-            return jsonify({"success": True, "message": "Attendance recorded."})
-        else:
-            return jsonify({"success": False, "message": "Face verification failed."})
+    if results[0]:
+        record_attendance(student_id_from_form)
+        return jsonify({"success": True, "message": "Attendance recorded."})
     else:
-        return jsonify({"success": False, "message": "Student face data not found."})
+        return jsonify(
+            {
+                "success": False,
+                "message": "Face verification failed for this Student ID.",
+            }
+        )
 
 
 @app.route("/live_records")
 def live_records():
     attendance_records = query_db(
-        "SELECT s.name, a.timestamp FROM attendance a JOIN students s ON a.student_id = s.id ORDER BY a.timestamp DESC LIMIT 5"  # Adjust LIMIT as needed
+        "SELECT s.name, a.timestamp FROM attendance a JOIN students s ON a.student_id = s.id ORDER BY a.timestamp DESC LIMIT 5"
     )
     return jsonify([dict(row) for row in attendance_records])
 

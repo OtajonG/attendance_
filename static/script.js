@@ -5,6 +5,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const webcamCanvas = document.getElementById('webcamCanvas');
   const captureContext = webcamCanvas.getContext('2d');
   const beaconStatus = document.getElementById('beacon-status');
+  const studentIdInput = document.getElementById('studentIdInput'); // Get the ID input field (assuming you've added this to your HTML)
+  const scanFaceButton = document.querySelector('.scan-face-button'); // Get the scan button (using class in case of multiple buttons)
+  const verificationStatus = document.getElementById('verificationStatus'); // Get the status display (assuming you've added this to your HTML)
 
   navigator.mediaDevices.getUserMedia({ video: true })
     .then(stream => {
@@ -32,7 +35,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const statusSpan = document.createElement('span');
         statusSpan.className = 'attendance-status';
-        statusSpan.id = `status-${student.id}`; // Corrected line
+        statusSpan.id = `status-${student.id}`; // Corrected line: template literal
 
         listItem.appendChild(nameSpan);
         listItem.appendChild(scanButton);
@@ -52,22 +55,23 @@ document.addEventListener('DOMContentLoaded', () => {
     scanFaceButtons.forEach(button => {
       button.addEventListener('click', function() {
         const studentId = this.dataset.studentId;
+        const currentStudentIdInput = studentIdInput ? studentIdInput.value : studentId; // Use input if available, else fallback
         beaconStatus.textContent = "Scanning for beacon...";
+        verificationStatus.textContent = ""; // Clear previous status
 
         fetch('/verify_face', {
           method: 'POST',
-          body: new FormData() // Initial beacon check doesn't need image
+          body: new FormData() // Initial beacon check doesn't need image or ID
         })
         .then(response => response.json())
         .then(data => {
           beaconStatus.textContent = data.message;
           if (data.success) {
-            // Capture image from webcam only if beacon is found
             captureContext.drawImage(webcamVideo, 0, 0, webcamCanvas.width, webcamCanvas.height);
             webcamCanvas.toBlob(blob => {
               const formData = new FormData();
               formData.append('webcamImage', blob, 'face.jpg');
-              formData.append('student_id', studentId);
+              formData.append('student_id', currentStudentIdInput); // Send the entered student ID
 
               fetch('/verify_face', {
                 method: 'POST',
@@ -75,32 +79,39 @@ document.addEventListener('DOMContentLoaded', () => {
               })
               .then(response => response.json())
               .then(faceData => {
-                const statusSpan = document.getElementById(`status-${studentId}`); // Corrected line
+                const statusSpan = document.getElementById(`status-${studentId}`); // Corrected line: template literal
                 if (faceData.success) {
-                  statusSpan.textContent = '✅'; // Tick mark
-                  button.disabled = true; // Disable button
+
+statusSpan.textContent = '✅'; // Tick mark
+                  verificationStatus.textContent = 'Attendance recorded.';
+                  button.disabled = true; // Disable button after successful attendance
                   fetchAttendanceRecords(); // Update the attendance table
                 } else {
-                  alert('Face verification failed.');
+                  alert('Face verification failed: ' + faceData.message);
+                  verificationStatus.textContent = 'Verification failed: ' + faceData.message;
                 }
               })
               .catch(error => {
                 console.error('Error verifying face:', error);
                 alert('Error verifying face.');
+                verificationStatus.textContent = 'Verification error.';
               });
             }, 'image/jpeg');
           } else {
             console.error('Beacon not found:', data.message);
+            verificationStatus.textContent = 'Beacon not found: ' + data.message;
           }
         })
         .catch(error => {
           beaconStatus.textContent = "Error checking beacon.";
           console.error('Error checking beacon:', error);
+          verificationStatus.textContent = 'Beacon check error.';
         });
       });
     });
   }
-function updateLiveLogs() {
+
+  function updateLiveLogs() {
     fetch('/live_records')
       .then(response => response.json())
       .then(data => {
@@ -111,7 +122,7 @@ function updateLiveLogs() {
           const ul = document.createElement('ul');
           data.forEach(record => {
             const li = document.createElement('li');
-            li.textContent = `${record.name} - ${record.timestamp}`; // Corrected line: used backticks for template literal
+            li.textContent = `${record.name} - ${record.timestamp}`; // Corrected line: template literal
             ul.appendChild(li);
           });
           liveLogsDiv.appendChild(ul);

@@ -1,15 +1,16 @@
-import face_recognition
-import sqlite3
-import datetime
 import asyncio
 from bleak import BleakScanner
-from bleak.backends.scanner import AdvertisementData
 import struct
+import face_recognition
+import sqlite3
+import numpy as np
+import os
 
-# iBeacon parameters to look for
+DATABASE = "attendance.db"
 TEACHER_BEACON_UUID = "019637fa-978a-7a1c-8447-f914acdc999c"
 TEACHER_BEACON_MAJOR = 1
 TEACHER_BEACON_MINOR = 10
+FACE_MATCH_THRESHOLD = 0.6  # Adjust as needed
 
 
 async def find_teacher_beacon():
@@ -19,90 +20,99 @@ async def find_teacher_beacon():
     for device in devices:
         advertisement_data = device.metadata.get("manufacturer_data", {})
         for manufacturer_id, data in advertisement_data.items():
-            if (
-                manufacturer_id == 0x004C and len(data) >= 23
-            ):  # Apple manufacturer ID and minimum iBeacon length
-                # Parse iBeacon data
-                ibeacon_prefix = data[0:2]
-                if ibeacon_prefix == b"\x02\x15":
-                    proximity_uuid_bytes = data[2:18]
-                    major_bytes = data[18:20]
-                    minor_bytes = data[20:22]
+            if manufacturer_id == 0x004C and len(data) >= 21:
+                # Look for the iBeacon prefix within the first few bytes
+                for i in range(min(5, len(data) - 1)):
+                    if data[i : i + 2] == b"\x02\x15":
+                        # Prefix found, now parse the rest based on the offset
+                        if len(data) >= i + 21:
+                            proximity_uuid_bytes = data[i + 2 : i + 18]
+                            major_bytes = data[i + 18 : i + 20]
+                            minor_bytes = data[i + 20 : i + 22]
 
-                    proximity_uuid = proximity_uuid_bytes.hex()
-                    major = int.from_bytes(major_bytes, byteorder="big")
-                    minor = int.from_bytes(minor_bytes, byteorder="big")
+                            proximity_uuid = proximity_uuid_bytes.hex()
+                            major = int.from_bytes(major_bytes, byteorder="big")
+                            minor = int.from_bytes(minor_bytes, byteorder="big")
 
-                    # Check if it's our teacher beacon
-                    if (
-                        proximity_uuid == TEACHER_BEACON_UUID.replace("-", "")
-                        and major == TEACHER_BEACON_MAJOR
-                        and minor == TEACHER_BEACON_MINOR
-                    ):
-                        print("Teacher beacon found!")
-                        return True
+                            target_uuid = TEACHER_BEACON_UUID.replace("-", "")
+
+                            print(
+                                f"Found potential iBeacon - UUID: {proximity_uuid}, Major: {major}, Minor: {minor}"
+                            )
+
+                            if proximity_uuid == target_uuid:
+                                print(
+                                    f"Potential Beacon Found with Correct UUID - Major: {major}, Minor: {minor}"
+                                )
+                                print("Teacher beacon found!")
+                                return True
+                            break  # Break after finding a potential prefix
+
     print("Teacher beacon not found.")
     return False
 
 
-def check_attendance(image_path):
+def verify_face(image_path):  # Assuming you are passing the path to the scanned image
     try:
-        image = face_recognition.load_image_file(image_path)
-        face_encodings = face_recognition.face_encodings(image)
+        # Load the scanned image
+        scan_image = face_recognition.load_image_file(image_path)
+        scan_face_encodings = face_recognition.face_encodings(scan_image)
 
-        if len(face_encodings) > 0:
-            face_encoding = face_encodings[0]
+        if not scan_face_encodings:
+            print("No face found in the scanned image.")
+            return None
 
-            conn = sqlite3.connect("attendance.db")
-            cursor = conn.cursor()
+        scan_face_encoding = scan_face_encodings[0]  # Assuming only one face per scan
 
-            cursor.execute(
-                "SELECT id, face_encoding FROM students"
-            )  # Select id instead of name
-            rows = cursor.fetchall()
+        conn = sqlite3.connect(DATABASE)
+        cursor = conn.cursor()
 
-            for row in rows:
-                student_id = row[0]  # Get student id
-                known_face_encoding = row[1]
-                known_face_encoding_array = face_recognition.load_image_file(
-                    f"Student {student_id}.jpg"  # load student photo to compare
+        cursor.execute("SELECT student_id, name, face_encoding FROM students")
+        enrolled_students = cursor.fetchall()
+
+        for student_id, name, encoded_data in enrolled_students:
+            if encoded_data:
+                known_face_encoding = np.frombuffer(encoded_data, dtype=np.float64)
+                face_distances = face_recognition.face_distance(
+                    [known_face_encoding], scan_face_encoding
                 )
-                known_face_encoding_array = face_recognition.face_encodings(
-                    known_face_encoding_array
-                )
-                if len(known_face_encoding_array) > 0:
-                    known_face_encoding_array = known_face_encoding_array[0]
-                    results = face_recognition.compare_faces(
-                        [known_face_encoding_array], face_encoding
-                    )
+                if face_distances[0] < FACE_MATCH_THRESHOLD:
+                    conn.close()
+                    print(f"Face recognized as student: {name} (ID: {student_id})")
+                    return student_id
 
-                    if results[0]:
-                        now = datetime.datetime.now()
-                        date_time = now.strftime("%Y-%m-%d %H:%M:%S")
+        conn.close()
+        print("Face not recognized.")
+        return None
 
-                        # Record attendance
-                        cursor.execute(
-                            "INSERT INTO attendance (student_id, timestamp) VALUES (?, ?)",  # change name to student_id and date_time to timestamp
-                            (student_id, date_time),
-                        )
-                        conn.commit()
-                        conn.close()
-                        return f"Attendance recorded for Student {student_id} at {date_time}."
-            conn.close()
-            return "Unknown face."
-        else:
-            return "No face found in image."
     except Exception as e:
-        return f"Error checking attendance: {e}"
+        print(f"Error during face verification: {e}")
+        return None
 
 
 async def main():
     beacon_found = await find_teacher_beacon()
     if beacon_found:
-        result = check_attendance("attendance_check.jpg")
-        print(result)
+        # For testing, let's assume the captured image is saved as 'current_scan.jpg'
+        # In a real application, you would get the path to the captured image
+        face_recognized_student_id = verify_face("current_scan.jpg")
+        if face_recognized_student_id:
+
+            # Record attendance using the recognized student_id
+            conn = sqlite3.connect(DATABASE)
+            cursor = conn.cursor()
+            cursor.execute(
+                "INSERT INTO attendance (student_id, timestamp) VALUES (?, DATETIME('now'))",
+                (face_recognized_student_id,),
+            )
+            conn.commit()
+            conn.close()
+            print(f"Attendance recorded for student ID: {face_recognized_student_id}")
+            return f"Attendance recorded for Student {face_recognized_student_id}"  # Return a message for the web page
+        else:
+            return "No face found or recognized."  # Return a message for the web page
     else:
-        print("Teacher beacon not found. Attendance check skipped.")
+        return "Teacher beacon not found. Attendance check skipped."  # Return a message for the web page
 
 
 if __name__ == "__main__":
