@@ -5,15 +5,22 @@ import face_recognition
 import sqlite3
 import numpy as np
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 DATABASE = "attendance.db"
-TEACHER_BEACON_UUID = "019637fa-978a-7a1c-8447-f914acdc999c"
-TEACHER_BEACON_MAJOR = 1
-TEACHER_BEACON_MINOR = 10
+TEACHER_BEACON_UUID = os.getenv("TEACHER_BEACON_UUID")
+TEACHER_BEACON_MAJOR = os.getenv("TEACHER_BEACON_MAJOR")
+TEACHER_BEACON_MINOR = os.getenv("TEACHER_BEACON_MINOR")
 FACE_MATCH_THRESHOLD = 0.6  # Adjust as needed
 
 
 async def find_teacher_beacon():
+    if not TEACHER_BEACON_UUID:
+        print("Teacher Beacon UUID not configured (check .env file).")
+        return False
+
     scanner = BleakScanner()
     devices = await scanner.discover(timeout=5.0)  # Scan for 5 seconds
 
@@ -21,10 +28,8 @@ async def find_teacher_beacon():
         advertisement_data = device.metadata.get("manufacturer_data", {})
         for manufacturer_id, data in advertisement_data.items():
             if manufacturer_id == 0x004C and len(data) >= 21:
-                # Look for the iBeacon prefix within the first few bytes
                 for i in range(min(5, len(data) - 1)):
                     if data[i : i + 2] == b"\x02\x15":
-                        # Prefix found, now parse the rest based on the offset
                         if len(data) >= i + 21:
                             proximity_uuid_bytes = data[i + 2 : i + 18]
                             major_bytes = data[i + 18 : i + 20]
@@ -36,84 +41,82 @@ async def find_teacher_beacon():
 
                             target_uuid = TEACHER_BEACON_UUID.replace("-", "")
 
-                            print(
-                                f"Found potential iBeacon - UUID: {proximity_uuid}, Major: {major}, Minor: {minor}"
+                            match_uuid = proximity_uuid == target_uuid
+                            match_major = (TEACHER_BEACON_MAJOR is None) or (
+                                str(major) == TEACHER_BEACON_MAJOR
+                            )
+                            match_minor = (TEACHER_BEACON_MINOR is None) or (
+                                str(minor) == TEACHER_BEACON_MINOR
                             )
 
-                            if proximity_uuid == target_uuid:
-                                print(
-                                    f"Potential Beacon Found with Correct UUID - Major: {major}, Minor: {minor}"
-                                )
+                            if match_uuid and match_major and match_minor:
                                 print("Teacher beacon found!")
                                 return True
-                            break  # Break after finding a potential prefix
+                            break
 
     print("Teacher beacon not found.")
     return False
 
 
-def verify_face(image_path):  # Assuming you are passing the path to the scanned image
-    try:
-        # Load the scanned image
-        scan_image = face_recognition.load_image_file(image_path)
-        scan_face_encodings = face_recognition.face_encodings(scan_image)
+# This function is not being used in the current app.py
+def check_attendance(image_path):
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
 
-        if not scan_face_encodings:
-            print("No face found in the scanned image.")
-            return None
+    cursor.execute("SELECT id, name, face_encoding FROM students")
+    students_data = cursor.fetchall()
 
-        scan_face_encoding = scan_face_encodings[0]  # Assuming only one face per scan
+    known_face_encodings = []
+    known_face_names = []
 
-        conn = sqlite3.connect(DATABASE)
-        cursor = conn.cursor()
+    for id, name, encoding_bytes in students_data:
+        if encoding_bytes:
+            encoding = np.frombuffer(encoding_bytes, dtype=np.float64)
+            known_face_encodings.append(encoding)
+            known_face_names.append(name)
 
-        cursor.execute("SELECT student_id, name, face_encoding FROM students")
-        enrolled_students = cursor.fetchall()
-
-        for student_id, name, encoded_data in enrolled_students:
-            if encoded_data:
-                known_face_encoding = np.frombuffer(encoded_data, dtype=np.float64)
-                face_distances = face_recognition.face_distance(
-                    [known_face_encoding], scan_face_encoding
-                )
-                if face_distances[0] < FACE_MATCH_THRESHOLD:
-                    conn.close()
-                    print(f"Face recognized as student: {name} (ID: {student_id})")
-                    return student_id
-
+    if not known_face_encodings:
         conn.close()
-        print("Face not recognized.")
-        return None
+        return "No student face data available."
 
-    except Exception as e:
-        print(f"Error during face verification: {e}")
-        return None
+    try:
+        unknown_image = face_recognition.load_image_file(image_path)
+        unknown_face_locations = face_recognition.face_locations(unknown_image)
+        unknown_face_encodings = face_recognition.face_encodings(
+            unknown_image, unknown_face_locations
+        )
 
-
-async def main():
-    beacon_found = await find_teacher_beacon()
-    if beacon_found:
-        # For testing, let's assume the captured image is saved as 'current_scan.jpg'
-        # In a real application, you would get the path to the captured image
-        face_recognized_student_id = verify_face("current_scan.jpg")
-        if face_recognized_student_id:
-
-            # Record attendance using the recognized student_id
-            conn = sqlite3.connect(DATABASE)
-            cursor = conn.cursor()
-            cursor.execute(
-                "INSERT INTO attendance (student_id, timestamp) VALUES (?, DATETIME('now'))",
-                (face_recognized_student_id,),
-            )
-            conn.commit()
+        if not unknown_face_encodings:
             conn.close()
-            print(f"Attendance recorded for student ID: {face_recognized_student_id}")
-            return f"Attendance recorded for Student {face_recognized_student_id}"  # Return a message for the web page
+            return "No faces detected in the scanned image."
+
+        face_distances = face_recognition.face_distance(
+            known_face_encodings, unknown_face_encodings[0]
+        )
+        best_match_index = np.argmin(face_distances)
+
+        if face_distances[best_match_index] < FACE_MATCH_THRESHOLD:
+            name = known_face_names[best_match_index]
+            cursor.execute("SELECT id FROM students WHERE name = ?", (name,))
+            student_id = cursor.fetchone()[0]
+            conn.close()
+            return f"Attendance marked for {name} (ID: {student_id})."
         else:
-            return "No face found or recognized."  # Return a message for the web page
-    else:
-        return "Teacher beacon not found. Attendance check skipped."  # Return a message for the web page
+            conn.close()
+            return "Face not recognized."
+
+    except FileNotFoundError:
+        conn.close()
+        return f"Error: Image file not found at {image_path}"
+    except Exception as e:
+        conn.close()
+        return f"An error occurred during face recognition: {e}"
 
 
 if __name__ == "__main__":
+
+    async def main():
+        beacon_found = await find_teacher_beacon()
+        print(f"Beacon found in main: {beacon_found}")
+
     asyncio.run(main())
